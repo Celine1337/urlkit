@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python: ["3.9", "3.12"]
+        exclude:
+          # ubuntu-latest (26.04) has no setup-python builds for 3.9
+          - os: ubuntu-latest
+            python: "3.9"
+        include:
+          - os: ubuntu-24.04
+            python: "3.9"
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Run tests
+        run: python -m unittest discover -s tests -v
+      - name: CLI smoke test
+        shell: bash
+        env:
+          # keep POSIX-looking args (e.g. --path /a) intact on Git Bash
+          MSYS2_ARG_CONV_EXCL: "*"
+        run: |
+          python urlkit.py --version
+          python urlkit.py parse "https://user:pass@Example.COM:8443/a/b?q=hello%20world&lang=en#docs" --no-color
+          python urlkit.py normalize "HTTP://Example.COM:80/a/./b/../c?greeting=hello world" --no-color
+          python urlkit.py build --scheme https --host example.com --path /a --query q=1 --no-color
+          python urlkit.py query "https://example.com/?a=1&b=2" --set a=9 --remove b --no-color
+          python urlkit.py parse "" --no-color || test $? -eq 2
